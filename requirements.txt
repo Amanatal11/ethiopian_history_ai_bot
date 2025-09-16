@@ -4,4 +4,4 @@ chromadb
 python-dotenv
 langchain-community
 langchain-groq
-sentence-transformers
+fastembed
