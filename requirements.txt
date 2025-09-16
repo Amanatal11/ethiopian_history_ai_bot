@@ -1,7 +1,7 @@
-openai
 langchain
 faiss-cpu
 chromadb
 python-dotenv
-langchain-openai
 langchain-community
+langchain-groq
+sentence-transformers
