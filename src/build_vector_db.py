@@ -2,22 +2,20 @@ import os
 import sys
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_openai import OpenAIEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-def _require_api_key() -> None:
-    key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not key or key.upper().startswith("REPLACE_"):
-        print("ERROR: OPENAI_API_KEY is missing or is a placeholder. Set it in .env.")
-        sys.exit(1)
+def _prepare_embeddings():
+    # Local embeddings, no API key required
+    model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    return HuggingFaceEmbeddings(model_name=model_name)
 
 
 def build_vector_db():
-    _require_api_key()
     print("📖 Loading documents...")
     loader = DirectoryLoader("data", glob="*.txt", loader_cls=TextLoader)
     documents = loader.load()
@@ -27,7 +25,7 @@ def build_vector_db():
 
     print(f"✅ Split into {len(texts)} chunks.")
 
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = _prepare_embeddings()
     db = FAISS.from_documents(texts, embeddings)
     db.save_local("vectorstore")
 

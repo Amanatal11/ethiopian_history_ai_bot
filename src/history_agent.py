@@ -1,7 +1,8 @@
 import os
 import sys
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_community.chat_models import ChatGroq
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
 
@@ -9,18 +10,18 @@ load_dotenv()
 
 
 def _require_api_key() -> None:
-    key = os.getenv("OPENAI_API_KEY", "").strip()
+    key = os.getenv("GROQ_API_KEY", "").strip()
     if not key or key.upper().startswith("REPLACE_"):
-        print("ERROR: OPENAI_API_KEY is missing or is a placeholder. Set it in .env.")
+        print("ERROR: GROQ_API_KEY is missing or is a placeholder. Set it in .env.")
         sys.exit(1)
 
 
 def run_agent():
     _require_api_key()
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    embeddings = HuggingFaceEmbeddings(model_name=os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
     db = FAISS.load_local("vectorstore", embeddings, allow_dangerous_deserialization=True)
 
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
     qa = RetrievalQA.from_chain_type(llm=llm, retriever=db.as_retriever())
 
     while True:
