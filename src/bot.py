@@ -195,9 +195,18 @@ async def main() -> None:
     scheduler.start()
     logger.info("Scheduler started: daily send at %02d:%02d", send_time.hour, send_time.minute)
 
-    # Start the bot within the same asyncio loop
+    # Start the bot within the same asyncio loop using the explicit async lifecycle (PTB v21)
     logger.info("Starting Telegram bot...")
-    await app.run_polling()
+    await app.initialize()
+    await app.start()
+    try:
+        await app.updater.start_polling()
+        # Block forever until externally stopped (Ctrl+C)
+        await asyncio.Event().wait()
+    finally:
+        await app.updater.stop()
+        await app.stop()
+        await app.shutdown()
 
 
 if __name__ == "__main__":
