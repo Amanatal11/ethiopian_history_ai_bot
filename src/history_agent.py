@@ -1,8 +1,8 @@
 import os
 import sys
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_community.chat_models import ChatGroq
+from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
 from dotenv import load_dotenv
 
@@ -18,7 +18,7 @@ def _require_api_key() -> None:
 
 def run_agent():
     _require_api_key()
-    embeddings = HuggingFaceEmbeddings(model_name=os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"))
+    embeddings = FastEmbedEmbeddings(model_name=os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5"))
     db = FAISS.load_local("vectorstore", embeddings, allow_dangerous_deserialization=True)
 
     llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)

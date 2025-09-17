@@ -1,7 +1,7 @@
 import os
 import sys
 from dotenv import load_dotenv
-from langchain_community.chat_models import ChatGroq
+from langchain_groq import ChatGroq
 
 load_dotenv()
 

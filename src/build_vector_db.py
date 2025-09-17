@@ -2,7 +2,7 @@ import os
 import sys
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import FastEmbedEmbeddings
 from langchain_community.vectorstores import FAISS
 from dotenv import load_dotenv
 
@@ -10,9 +10,9 @@ load_dotenv()
 
 
 def _prepare_embeddings():
-    # Local embeddings, no API key required
-    model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-    return HuggingFaceEmbeddings(model_name=model_name)
+    # Lightweight local embeddings, no GPU/torch required
+    model_name = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+    return FastEmbedEmbeddings(model_name=model_name)
 
 
 def build_vector_db():
