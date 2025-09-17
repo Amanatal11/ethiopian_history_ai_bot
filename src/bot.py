@@ -169,7 +169,7 @@ def _parse_daily_time(tstr: str) -> dtime:
         return dtime(hour=9, minute=0)
 
 
-def main() -> None:
+async def main() -> None:
     _require_env_vars()
 
     # Build the bot
@@ -180,7 +180,7 @@ def main() -> None:
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("fact", fact_command))
 
-    # Setup the scheduler
+    # Setup the scheduler (shares the same asyncio loop as this function)
     scheduler = AsyncIOScheduler()
     send_time = _parse_daily_time(DAILY_SEND_TIME)
     scheduler.add_job(
@@ -195,10 +195,10 @@ def main() -> None:
     scheduler.start()
     logger.info("Scheduler started: daily send at %02d:%02d", send_time.hour, send_time.minute)
 
-    # Start the bot (blocking call; PTB manages asyncio loop internally)
+    # Start the bot within the same asyncio loop
     logger.info("Starting Telegram bot...")
-    app.run_polling(stop_signals=None)
+    await app.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
