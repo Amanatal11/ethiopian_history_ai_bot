@@ -14,7 +14,7 @@ def _get_api_key() -> str:
     return key
 
 
-def test_openai() -> None:
+def test_groq() -> None:
     _get_api_key()
     try:
         llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
@@ -27,4 +27,4 @@ def test_openai() -> None:
 
 
 if __name__ == "__main__":
-    test_openai()
+    test_groq()
