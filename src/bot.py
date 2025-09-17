@@ -12,13 +12,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage
 
-from telegram import Bot
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     ContextTypes,
-    ContextTypes as CTypes,
-    defaults,
 )
 
 # ------------------------------
@@ -86,7 +83,7 @@ def _save_subscribers(subs: Set[int]) -> None:
             json.dump({"subscribers": list(subs)}, fh)
 
 
-async def start_command(update: "telegram.Update", context: CTypes.DEFAULT_TYPE) -> None:
+async def start_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     subs = _load_subscribers()
     if chat_id in subs:
@@ -97,7 +94,7 @@ async def start_command(update: "telegram.Update", context: CTypes.DEFAULT_TYPE)
     await update.message.reply_text("Subscribed ✅ You will receive one short Ethiopian history fact daily.")
 
 
-async def stop_command(update: "telegram.Update", context: CTypes.DEFAULT_TYPE) -> None:
+async def stop_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.effective_chat.id
     subs = _load_subscribers()
     if chat_id not in subs:
@@ -108,7 +105,7 @@ async def stop_command(update: "telegram.Update", context: CTypes.DEFAULT_TYPE) 
     await update.message.reply_text("Unsubscribed ✅ You will no longer receive daily facts.")
 
 
-async def fact_command(update: "telegram.Update", context: CTypes.DEFAULT_TYPE) -> None:
+async def fact_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
     # On-demand fact generation
     try:
         fact = await asyncio.to_thread(_generate_fact_sync)
@@ -175,18 +172,14 @@ def _parse_daily_time(tstr: str) -> dtime:
 def main() -> None:
     _require_env_vars()
 
-    # Set default parse mode if needed
-    defaults.DEFAULT_NONE = None
-
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("stop", stop_command))
-    app.add_handler(CommandHandler("fact", fact_command))  # optional on-demand command
+    app.add_handler(CommandHandler("fact", fact_command))
 
     scheduler = AsyncIOScheduler()
     send_time = _parse_daily_time(DAILY_SEND_TIME)
-    # schedule at given local time every day
     scheduler.add_job(
         _send_daily_facts,
         "cron",
@@ -200,7 +193,7 @@ def main() -> None:
     logger.info("Scheduler started: daily send at %02d:%02d", send_time.hour, send_time.minute)
 
     logger.info("Starting Telegram bot...")
-    app.run_polling(stop_signals=None)  # run until process killed
+    app.run_polling(stop_signals=None)
 
 
 if __name__ == "__main__":
