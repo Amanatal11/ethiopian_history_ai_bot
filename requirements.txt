@@ -1,7 +1,18 @@
-langchain
-faiss-cpu
-chromadb
-python-dotenv
-langchain-community
-langchain-groq
-fastembed
+# Core dependencies
+python-telegram-bot==21.7
+langchain==0.3.7
+langchain-groq==0.3.8
+langchain-community==0.3.29
+python-dotenv==1.0.1
+apscheduler==3.11.0
+
+# AI/ML dependencies
+groq==0.31.1
+fastembed==0.7.3
+
+# Vector database (optional for future RAG features)
+faiss-cpu==1.12.0
+chromadb==1.1.0
+
+# HTTP client
+httpx==0.28.1

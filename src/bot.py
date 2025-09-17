@@ -1,3 +1,13 @@
+"""
+Ethiopian History AI Bot
+
+A sophisticated Telegram bot that delivers daily Ethiopian history facts
+powered by AI using Groq's LLaMA-3 model via LangChain.
+
+Author: Ethiopian History AI Bot Team
+License: MIT
+"""
+
 import os
 import json
 import asyncio
@@ -19,170 +29,250 @@ from telegram.ext import (
 )
 
 # ------------------------------
-# Simple production-ready Telegram bot
-# - Subscriptions stored in subscribers.json (chat_id set)
-# - Uses Groq LLaMA-3 (via langchain_groq) for content generation
-# - Sends one short Ethiopian history fact daily
-#
-# How to run:
-# 1. Create a .env file in project root with:
-#    TELEGRAM_BOT_TOKEN="your_telegram_token"
-#    GROQ_API_KEY="your_groq_api_key"
-#    (optional) DAILY_SEND_TIME="09:00"   # HH:MM in 24h local time, default 09:00
-#
-# 2. Install dependencies:
-#    pip install python-telegram-bot==20.6 apscheduler langchain-groq python-dotenv
-#
-# 3. Run:
-#    python src/bot.py
-#
-# Notes:
-# - This file uses AsyncIOScheduler so the scheduler runs on the same asyncio loop as the bot.
-# - Subscriber storage is a small JSON file. For higher scale use a real DB.
+# Configuration and Constants
 # ------------------------------
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
+# Load environment variables
 load_dotenv()
 
+# Environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 DAILY_SEND_TIME = os.getenv("DAILY_SEND_TIME", "09:00").strip()  # "HH:MM"
 
+# File paths and synchronization
 SUBSCRIBERS_FILE = os.path.join(os.path.dirname(__file__), "..", "subscribers.json")
 _SUB_LOCK = threading.Lock()
 
 
 def _require_env_vars() -> None:
+    """Validate that all required environment variables are set."""
     if not TELEGRAM_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN is missing. Set it in .env")
         raise SystemExit(1)
     if not GROQ_API_KEY:
         logger.error("GROQ_API_KEY is missing. Set it in .env")
         raise SystemExit(1)
+    logger.info("Environment variables validated successfully")
 
 
 def _load_subscribers() -> Set[int]:
+    """Load subscriber chat IDs from JSON file."""
     with _SUB_LOCK:
         try:
             if not os.path.exists(SUBSCRIBERS_FILE):
+                logger.info("No subscribers file found, starting with empty set")
                 return set()
             with open(SUBSCRIBERS_FILE, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
-            return set(int(x) for x in data.get("subscribers", []))
-        except Exception:
+            subscribers = set(int(x) for x in data.get("subscribers", []))
+            logger.info(f"Loaded {len(subscribers)} subscribers")
+            return subscribers
+        except Exception as e:
             logger.exception("Failed to load subscribers.json; starting with empty set.")
             return set()
 
 
 def _save_subscribers(subs: Set[int]) -> None:
+    """Save subscriber chat IDs to JSON file."""
     with _SUB_LOCK:
-        os.makedirs(os.path.dirname(SUBSCRIBERS_FILE), exist_ok=True)
-        with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as fh:
-            json.dump({"subscribers": list(subs)}, fh)
+        try:
+            os.makedirs(os.path.dirname(SUBSCRIBERS_FILE), exist_ok=True)
+            with open(SUBSCRIBERS_FILE, "w", encoding="utf-8") as fh:
+                json.dump({"subscribers": list(subs)}, fh, indent=2)
+            logger.info(f"Saved {len(subs)} subscribers to file")
+        except Exception as e:
+            logger.exception("Failed to save subscribers to file")
 
 
 async def start_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /start command - subscribe user to daily facts."""
     chat_id = update.effective_chat.id
+    user_name = update.effective_user.first_name or "User"
+    
     subs = _load_subscribers()
     if chat_id in subs:
-        await update.message.reply_text("You are already subscribed to daily Ethiopian history facts.")
+        await update.message.reply_text(
+            "You are already subscribed to daily Ethiopian history facts! 📚"
+        )
+        logger.info(f"User {user_name} (ID: {chat_id}) attempted to subscribe but was already subscribed")
         return
+    
     subs.add(chat_id)
     _save_subscribers(subs)
-    await update.message.reply_text("Subscribed ✅ You will receive one short Ethiopian history fact daily.")
+    await update.message.reply_text(
+        "Subscribed ✅ You will receive one short Ethiopian history fact daily at 9:00 AM! 🇪🇹"
+    )
+    logger.info(f"User {user_name} (ID: {chat_id}) successfully subscribed")
 
 
 async def stop_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /stop command - unsubscribe user from daily facts."""
     chat_id = update.effective_chat.id
+    user_name = update.effective_user.first_name or "User"
+    
     subs = _load_subscribers()
     if chat_id not in subs:
-        await update.message.reply_text("You are not subscribed.")
+        await update.message.reply_text("You are not subscribed to daily facts.")
+        logger.info(f"User {user_name} (ID: {chat_id}) attempted to unsubscribe but was not subscribed")
         return
+    
     subs.remove(chat_id)
     _save_subscribers(subs)
     await update.message.reply_text("Unsubscribed ✅ You will no longer receive daily facts.")
+    logger.info(f"User {user_name} (ID: {chat_id}) successfully unsubscribed")
 
 
 async def fact_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
-    # On-demand fact generation
+    """Handle /fact command - generate and send an instant history fact."""
+    user_name = update.effective_user.first_name or "User"
+    logger.info(f"User {user_name} requested an instant fact")
+    
     try:
+        await update.message.reply_text("Generating a fascinating Ethiopian history fact... 🤔")
         fact = await asyncio.to_thread(_generate_fact_sync)
-        await update.message.reply_text(fact)
+        await update.message.reply_text(f"📚 **Ethiopian History Fact:**\n\n{fact}")
+        logger.info(f"Successfully generated fact for user {user_name}")
     except Exception as exc:
         logger.exception("Failed to generate fact on-demand")
-        await update.message.reply_text("Sorry, I couldn't generate a fact right now.")
+        await update.message.reply_text(
+            "Sorry, I couldn't generate a fact right now. Please try again later! 😔"
+        )
 
 
 def _generate_fact_sync() -> str:
     """
-    Synchronous Groq call. We run this in a thread via asyncio.to_thread so it
-    doesn't block the asyncio loop.
+    Generate an Ethiopian history fact using Groq's LLaMA-3 model.
+    
+    This function runs synchronously in a thread to avoid blocking the asyncio loop.
+    Returns a formatted history fact string.
     """
-    # ChatGroq reads GROQ_API_KEY from env by default; ensure env var is set.
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0.0)
-    prompt = "Give a short Ethiopian history fact in 2–3 sentences."
-    # Use HumanMessage wrapper to be consistent with langchain schema
-    resp = llm.invoke([HumanMessage(content=prompt)])
-    # langchain_groq may return an object with .content or similar; handle common shapes
-    if hasattr(resp, "content"):
-        return resp.content.strip()
-    if isinstance(resp, list) and resp and hasattr(resp[0], "content"):
-        return resp[0].content.strip()
-    # Fallback to string representation
-    return str(resp).strip()
+    try:
+        # Initialize Groq LLM with LLaMA-3 model
+        llm = ChatGroq(
+            model="llama-3.1-8b-instant", 
+            temperature=0.7,  # Slightly higher for more creative facts
+            max_tokens=150    # Limit response length
+        )
+        
+        prompt = (
+            "Provide a fascinating and accurate Ethiopian history fact in 2-3 sentences. "
+            "Focus on interesting events, cultural aspects, or historical figures. "
+            "Make it engaging and educational."
+        )
+        
+        # Generate response using LangChain schema
+        response = llm.invoke([HumanMessage(content=prompt)])
+        
+        # Extract content from response
+        if hasattr(response, "content"):
+            return response.content.strip()
+        if isinstance(response, list) and response and hasattr(response[0], "content"):
+            return response[0].content.strip()
+        
+        # Fallback to string representation
+        return str(response).strip()
+        
+    except Exception as e:
+        logger.error(f"Error generating fact: {e}")
+        return "I apologize, but I'm having trouble generating a history fact right now. Please try again later."
 
 
 async def _send_daily_facts(app: "telegram.ext.Application") -> None:
     """
-    Generates one fact and sends it to every subscriber.
-    Runs on the asyncio loop (AsyncIOScheduler).
+    Generate and send daily Ethiopian history facts to all subscribers.
+    
+    This function is called by the scheduler and runs on the asyncio loop.
     """
     subs = _load_subscribers()
     if not subs:
-        logger.info("No subscribers; skipping daily send.")
+        logger.info("No subscribers; skipping daily fact delivery")
         return
 
-    logger.info("Generating daily fact via Groq...")
+    logger.info(f"Starting daily fact generation for {len(subs)} subscribers")
+    
     try:
+        # Generate the daily fact
         fact = await asyncio.to_thread(_generate_fact_sync)
-    except Exception:
+        logger.info("Successfully generated daily fact")
+        
+        # Send to all subscribers
+        successful_sends = 0
+        failed_sends = 0
+        
+        for chat_id in subs:
+            try:
+                await app.bot.send_message(
+                    chat_id=chat_id, 
+                    text=f"🌅 **Daily Ethiopian History Fact**\n\n{fact}\n\n🇪🇹 Have a great day!"
+                )
+                successful_sends += 1
+            except Exception as e:
+                logger.warning(f"Failed to send daily fact to {chat_id}: {e}")
+                failed_sends += 1
+        
+        logger.info(f"Daily fact delivery completed: {successful_sends} successful, {failed_sends} failed")
+        
+    except Exception as e:
         logger.exception("Failed to generate daily fact")
-        return
-
-    logger.info("Sending daily fact to %d subscribers", len(subs))
-    for chat_id in subs:
-        try:
-            await app.bot.send_message(chat_id=chat_id, text=fact)
-        except Exception:
-            logger.exception("Failed to send daily fact to %s", chat_id)
+        # Optionally send error notification to admin or log to monitoring system
 
 
-def _parse_daily_time(tstr: str) -> dtime:
+def _parse_daily_time(time_str: str) -> dtime:
+    """
+    Parse daily send time from string format (HH:MM) to datetime.time object.
+    
+    Args:
+        time_str: Time string in HH:MM format
+        
+    Returns:
+        datetime.time object with parsed time, defaults to 09:00 if invalid
+    """
     try:
-        parts = [int(p) for p in tstr.split(":", 1)]
+        parts = [int(p) for p in time_str.split(":", 1)]
         hour, minute = parts[0], parts[1] if len(parts) > 1 else 0
-        return dtime(hour=hour % 24, minute=minute % 60)
-    except Exception:
-        logger.warning("Invalid DAILY_SEND_TIME %r, defaulting to 09:00", tstr)
+        parsed_time = dtime(hour=hour % 24, minute=minute % 60)
+        logger.info(f"Parsed daily send time: {parsed_time}")
+        return parsed_time
+    except Exception as e:
+        logger.warning(f"Invalid DAILY_SEND_TIME '{time_str}', defaulting to 09:00. Error: {e}")
         return dtime(hour=9, minute=0)
 
 
 async def main() -> None:
+    """
+    Main application entry point.
+    
+    Initializes the Telegram bot, sets up the scheduler, and starts both services
+    running on the same asyncio event loop.
+    """
+    logger.info("Starting Ethiopian History AI Bot...")
+    
+    # Validate environment variables
     _require_env_vars()
 
-    # Build the bot
+    # Build the Telegram bot application
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    logger.info("Telegram bot application created")
 
-    # Add command handlers
+    # Register command handlers
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("fact", fact_command))
+    logger.info("Command handlers registered")
 
-    # Setup the scheduler (shares the same asyncio loop as this function)
+    # Setup the scheduler (shares the same asyncio loop as the bot)
     scheduler = AsyncIOScheduler()
     send_time = _parse_daily_time(DAILY_SEND_TIME)
+    
     scheduler.add_job(
         _send_daily_facts,
         "cron",
@@ -193,20 +283,33 @@ async def main() -> None:
         replace_existing=True,
     )
     scheduler.start()
-    logger.info("Scheduler started: daily send at %02d:%02d", send_time.hour, send_time.minute)
+    logger.info(f"Scheduler started: daily facts will be sent at {send_time.strftime('%H:%M')}")
 
-    # Start the bot within the same asyncio loop using the explicit async lifecycle (PTB v21)
-    logger.info("Starting Telegram bot...")
+    # Start the bot using explicit async lifecycle (PTB v21+)
+    logger.info("Initializing Telegram bot...")
     await app.initialize()
     await app.start()
+    
     try:
+        logger.info("Starting bot polling...")
         await app.updater.start_polling()
-        # Block forever until externally stopped (Ctrl+C)
+        
+        # Keep the bot running until interrupted
+        logger.info("Bot is now running! Press Ctrl+C to stop.")
         await asyncio.Event().wait()
+        
+    except KeyboardInterrupt:
+        logger.info("Received shutdown signal...")
+    except Exception as e:
+        logger.exception("Unexpected error in main loop")
     finally:
+        # Graceful shutdown
+        logger.info("Shutting down bot...")
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
+        scheduler.shutdown()
+        logger.info("Bot shutdown complete")
 
 
 if __name__ == "__main__":
