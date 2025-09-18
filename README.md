@@ -5,7 +5,7 @@ A sophisticated Telegram bot that delivers daily Ethiopian history facts powered
 ## 🌟 Features
 
 - **AI-Powered Content Generation**: Uses Groq's LLaMA-3 model via LangChain for intelligent history fact generation
-- **Telegram Bot Integration**: Seamless user interaction through Telegram's messaging platform
+- **Telegram Bot Integration**: Seamless user interaction through Telegram's messaging platformcommim
 - **Automated Scheduling**: Daily fact delivery at configurable times using APScheduler
 - **Subscription Management**: Users can subscribe/unsubscribe from daily facts
 - **On-Demand Facts**: Request instant history facts with `/fact` command
@@ -78,6 +78,7 @@ python src/bot.py
 - `/start` - Subscribe to daily Ethiopian history facts
 - `/stop` - Unsubscribe from daily facts
 - `/fact` - Get an instant history fact
+- `/theme` - Manage Weekly Themed History Series (see below)
 
 ### Example Interaction
 
@@ -96,6 +97,22 @@ The bot can be configured through environment variables:
 - `TELEGRAM_BOT_TOKEN`: Your Telegram bot token (required)
 - `GROQ_API_KEY`: Your Groq API key (required)
 - `DAILY_SEND_TIME`: Time for daily fact delivery in HH:MM format (default: 09:00)
+- `ENABLE_THEMES`: Enable Weekly Themed Series feature (`true`/`false`, default: false)
+- `THEME_ADMIN_IDS`: Optional comma-separated list of admin chat IDs allowed to set weekly theme manually
+
+### Weekly Themed History Series
+
+When `ENABLE_THEMES=true`, users can opt in to receive a 7-day themed mini-series each week.
+
+- Subscribe: `/theme on` or `/theme subscribe`
+- Unsubscribe: `/theme off` or `/theme unsubscribe`
+- Status: `/theme status`
+- Admin set theme: `/theme set Ancient Kingdoms of Ethiopia`
+
+How it works:
+- Each week a theme is chosen (random by default, or admin-set).
+- Subscribed users receive a themed fact daily (Day 1–7) that builds a narrative.
+- A weekly summary is sent every Sunday at 20:00 local time, compiling the week’s facts.
 
 ## 🏗️ Project Structure
 
