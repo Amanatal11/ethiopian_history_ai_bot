@@ -27,6 +27,7 @@ from telegram.ext import (
     CommandHandler,
     ContextTypes,
 )
+import themes
 
 # ------------------------------
 # Configuration and Constants
@@ -148,6 +149,78 @@ async def fact_command(update: "telegram.Update", context: ContextTypes.DEFAULT_
         )
 
 
+async def theme_command(update: "telegram.Update", context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Manage Weekly Themed History Series subscriptions and admin actions.
+
+    Usage:
+      /theme on | subscribe
+      /theme off | unsubscribe
+      /theme status
+      /theme set <theme name>   (admin only)
+    """
+    if not themes.is_themes_enabled():
+        await update.message.reply_text("Themed series is currently disabled by the admin.")
+        return
+
+    chat_id = update.effective_chat.id
+    user_name = update.effective_user.first_name or "User"
+    args = context.args or []
+
+    if not args:
+        status = "subscribed" if themes.is_subscribed(chat_id) else "not subscribed"
+        _, current_theme = themes.get_current_theme()
+        await update.message.reply_text(
+            "Weekly Themed Series: "
+            f"You are currently {status}.\n"
+            "Use /theme on to subscribe or /theme off to unsubscribe.\n"
+            f"Current theme: {current_theme or 'TBD'}"
+        )
+        return
+
+    action = args[0].lower()
+    if action in {"on", "subscribe"}:
+        if themes.subscribe(chat_id):
+            await update.message.reply_text("Subscribed to Weekly Themed Series ✅")
+            logger.info(f"User {user_name} (ID: {chat_id}) subscribed to themes")
+        else:
+            await update.message.reply_text("You are already subscribed to themes.")
+        return
+
+    if action in {"off", "unsubscribe"}:
+        if themes.unsubscribe(chat_id):
+            await update.message.reply_text("Unsubscribed from Weekly Themed Series ✅")
+            logger.info(f"User {user_name} (ID: {chat_id}) unsubscribed from themes")
+        else:
+            await update.message.reply_text("You were not subscribed to themes.")
+        return
+
+    if action == "status":
+        status = "subscribed" if themes.is_subscribed(chat_id) else "not subscribed"
+        wk, current_theme = themes.get_current_theme()
+        await update.message.reply_text(
+            f"You are {status}. Current week: {wk or 'TBD'}, Theme: {current_theme or 'TBD'}."
+        )
+        return
+
+    if action == "set":
+        # Optional admin override using comma-separated IDs in THEME_ADMIN_IDS
+        admin_ids_str = os.getenv("THEME_ADMIN_IDS", "").strip()
+        admin_ids = {int(x) for x in admin_ids_str.split(",") if x.strip().isdigit()} if admin_ids_str else set()
+        if chat_id not in admin_ids:
+            await update.message.reply_text("You are not authorized to set the theme.")
+            return
+        if len(args) < 2:
+            await update.message.reply_text("Usage: /theme set <theme name>")
+            return
+        manual_theme = " ".join(args[1:]).strip()
+        wk, th = themes.ensure_current_week_theme(admin_override=manual_theme)
+        await update.message.reply_text(f"Set weekly theme to '{th}' for week {wk} ✅")
+        logger.info(f"Admin {chat_id} set weekly theme to '{th}' for {wk}")
+        return
+    
+    await update.message.reply_text("Unknown action. Use /theme on|off|status or /theme set <name>.")
+
+
 def _generate_fact_sync() -> str:
     """
     Generate an Ethiopian history fact using Groq's LLaMA-3 model.
@@ -200,29 +273,49 @@ async def _send_daily_facts(app: "telegram.ext.Application") -> None:
     logger.info(f"Starting daily fact generation for {len(subs)} subscribers")
     
     try:
-        # Generate the daily fact
-        fact = await asyncio.to_thread(_generate_fact_sync)
-        logger.info("Successfully generated daily fact")
+        # For non-themed users, prepare a generic fact once
+        generic_fact: Optional[str] = None
         
-        # Send to all subscribers
+        # Prepare theme/day context if enabled
+        wk = theme_name = None
+        day_index = None
+        if themes.is_themes_enabled():
+            wk, theme_name = themes.ensure_current_week_theme()
+            day_index = themes.get_day_index_for_week()
+
         successful_sends = 0
         failed_sends = 0
-        
+
         for chat_id in subs:
             try:
-                await app.bot.send_message(
-                    chat_id=chat_id, 
-                    text=f"🌅 **Daily Ethiopian History Fact**\n\n{fact}\n\n🇪🇹 Have a great day!"
-                )
+                if themes.is_themes_enabled() and themes.is_subscribed(chat_id) and theme_name and day_index:
+                    # Themed fact
+                    themed_fact = await asyncio.to_thread(themes.generate_themed_fact_sync, theme_name, day_index)
+                    await app.bot.send_message(
+                        chat_id=chat_id,
+                        text=(
+                            f"🌅 Weekly Theme: {theme_name}\n"
+                            f"Day {day_index}/7\n\n{themed_fact}"
+                        ),
+                    )
+                    themes.log_fact_for_chat(chat_id, wk, themed_fact)
+                else:
+                    # Generic fact
+                    if generic_fact is None:
+                        generic_fact = await asyncio.to_thread(_generate_fact_sync)
+                    await app.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"🌅 **Daily Ethiopian History Fact**\n\n{generic_fact}\n\n🇪🇹 Have a great day!",
+                    )
                 successful_sends += 1
             except Exception as e:
                 logger.warning(f"Failed to send daily fact to {chat_id}: {e}")
                 failed_sends += 1
-        
+
         logger.info(f"Daily fact delivery completed: {successful_sends} successful, {failed_sends} failed")
-        
+
     except Exception as e:
-        logger.exception("Failed to generate daily fact")
+        logger.exception("Failed during daily fact processing")
         # Optionally send error notification to admin or log to monitoring system
 
 
@@ -267,6 +360,7 @@ async def main() -> None:
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("fact", fact_command))
+    app.add_handler(CommandHandler("theme", theme_command))
     logger.info("Command handlers registered")
 
     # Setup the scheduler (shares the same asyncio loop as the bot)
@@ -282,6 +376,19 @@ async def main() -> None:
         id="daily_fact_job",
         replace_existing=True,
     )
+    # Weekly themed summaries on Sunday 20:00 if enabled
+    if themes.is_themes_enabled():
+        scheduler.add_job(
+            themes.send_weekly_summaries,
+            "cron",
+            day_of_week="sun",
+            hour=20,
+            minute=0,
+            args=(app,),
+            id="weekly_summary_job",
+            replace_existing=True,
+        )
+
     scheduler.start()
     logger.info(f"Scheduler started: daily facts will be sent at {send_time.strftime('%H:%M')}")
 
