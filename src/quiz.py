@@ -1,4 +1,70 @@
 """
+Quiz feature: /quiz command and answer handling.
+
+Presents a random multiple-choice question using InlineKeyboard buttons
+and responds with correctness feedback.
+"""
+
+import logging
+import random
+from typing import Dict
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import ContextTypes
+
+from .quiz_data import QUIZ_QUESTIONS
+
+logger = logging.getLogger(__name__)
+
+
+def _build_keyboard(options):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(text=opt, callback_data=f"quiz|{opt}")]
+        for opt in options
+    ])
+
+
+async def quiz_command(update: "Update", context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a random quiz question with multiple-choice buttons."""
+    if not QUIZ_QUESTIONS:
+        await update.message.reply_text("No quiz questions available right now.")
+        return
+
+    q = random.choice(QUIZ_QUESTIONS)
+
+    # Store the correct answer in user_data keyed by chat id for this interaction
+    context.user_data["quiz_correct_answer"] = q["answer"]
+
+    await update.message.reply_text(
+        text=q["question"],
+        reply_markup=_build_keyboard(q["options"]),
+    )
+
+
+async def quiz_callback(update: "Update", context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle quiz answer button presses."""
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data or ""
+    prefix, _, chosen = data.partition("|")
+    if prefix != "quiz":
+        return
+
+    correct = context.user_data.get("quiz_correct_answer")
+    if not correct:
+        await query.edit_message_text("Quiz session expired. Use /quiz to try again.")
+        return
+
+    if chosen == correct:
+        await query.edit_message_text("✅ Correct!")
+    else:
+        await query.edit_message_text(f"❌ Incorrect. The correct answer is {correct}.")
+
+    # Clear stored answer
+    context.user_data.pop("quiz_correct_answer", None)
+
+"""
 Random History Quiz utilities for the Ethiopian History AI Bot.
 
 Provides a /quiz command that sends one multiple-choice question using
