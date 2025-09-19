@@ -79,6 +79,7 @@ python src/bot.py
 - `/stop` - Unsubscribe from daily facts
 - `/fact` - Get an instant history fact
 - `/theme` - Manage Weekly Themed History Series (see below)
+- `/quiz` - Get a random multiple-choice history quiz
 
 ### Example Interaction
 
@@ -113,6 +114,16 @@ How it works:
 - Each week a theme is chosen (random by default, or admin-set).
 - Subscribed users receive a themed fact daily (Day 1–7) that builds a narrative.
 - A weekly summary is sent every Sunday at 20:00 local time, compiling the week’s facts.
+
+### Random History Quiz
+
+Use `/quiz` to get a single multiple-choice question about Ethiopian history.
+Tap one of the inline buttons to answer. The bot replies with:
+
+- ✅ Correct!
+- ❌ Incorrect. The correct answer is X.
+
+No scoring or tracking is stored; it’s just a quick learning prompt.
 
 ## 🏗️ Project Structure
 
