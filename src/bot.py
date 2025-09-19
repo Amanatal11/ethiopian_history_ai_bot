@@ -28,6 +28,7 @@ from telegram.ext import (
     ContextTypes,
 )
 import themes
+from quiz import build_quiz_message, handle_quiz_selection
 
 # ------------------------------
 # Configuration and Constants
@@ -361,6 +362,7 @@ async def main() -> None:
     app.add_handler(CommandHandler("stop", stop_command))
     app.add_handler(CommandHandler("fact", fact_command))
     app.add_handler(CommandHandler("theme", theme_command))
+    app.add_handler(CommandHandler("quiz", quiz_command))
     logger.info("Command handlers registered")
 
     # Setup the scheduler (shares the same asyncio loop as the bot)
